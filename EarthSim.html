@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earth, Moon, and Sun Simulation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Use soft shadows
+        document.body.appendChild(renderer.domElement);
+
+        // Texture loader
+        const textureLoader = new THREE.TextureLoader();
+        const earthTexture = textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_atmos_2048.jpg');
+        const moonTexture = textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/moon_1024.jpg');
+
+        // Camera controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.enableZoom = true;  // Allow zooming
+        controls.enableRotate = true;  // Allow rotation
+        controls.enablePan = false;  // Disable panning to lock focus on Earth
+
+        // Sun (light source and model)
+        const sunLight = new THREE.PointLight(0xffaa33, 2, 300);
+        sunLight.position.set(0, 0, 0); // Sun is at the center
+        sunLight.castShadow = true;
+
+        // Smooth shadow settings for Sun
+        sunLight.shadow.mapSize.width = 4096;  // Increase shadow map width
+        sunLight.shadow.mapSize.height = 4096; // Increase shadow map height
+        sunLight.shadow.camera.near = 1;        // Near distance for shadow camera
+        sunLight.shadow.camera.far = 500;       // Far distance for shadow camera
+        sunLight.shadow.normalBias = 0.05;      // Reduce shadow acne
+
+        scene.add(sunLight);
+
+        // Bigger Sun
+        const sunGeometry = new THREE.SphereGeometry(20, 32, 32);
+        const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+        const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+        sun.position.set(0, 0, 0);
+        scene.add(sun);
+
+        // Earth
+        const earthGeometry = new THREE.SphereGeometry(5, 32, 32);
+        const earthMaterial = new THREE.MeshStandardMaterial({ map: earthTexture });
+        const earth = new THREE.Mesh(earthGeometry, earthMaterial);
+        earth.castShadow = true;
+        earth.receiveShadow = true;
+        scene.add(earth);
+
+        // Moon
+        const moonGeometry = new THREE.SphereGeometry(1.2, 32, 32);
+        const moonMaterial = new THREE.MeshStandardMaterial({ map: moonTexture });
+        const moon = new THREE.Mesh(moonGeometry, moonMaterial);
+        moon.castShadow = true;
+        moon.receiveShadow = true;
+        scene.add(moon);
+
+        // Stars background
+        function createStars() {
+            const starsGeometry = new THREE.BufferGeometry();
+            const starsVertices = [];
+            for (let i = 0; i < 10000; i++) {
+                const x = (Math.random() - 0.5) * 2000;
+                const y = (Math.random() - 0.5) * 2000;
+                const z = (Math.random() - 0.5) * 2000;
+                starsVertices.push(x, y, z);
+            }
+            starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+            const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.5 });
+            const stars = new THREE.Points(starsGeometry, starsMaterial);
+            scene.add(stars);
+        }
+        createStars();
+
+        // Orbit Variables
+        let earthOrbitAngle = 0;
+        let moonOrbitAngle = 0;
+        const earthOrbitRadius = 100;  // Earth-Sun distance
+        const moonOrbitRadius = 12;    // Moon-Earth distance
+
+        // Set initial camera position
+        camera.position.set(0, 20, 150);
+        controls.target.copy(earth.position);
+        controls.update();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Rotate Earth
+            earth.rotation.y += 0.002;
+
+            // Move Earth in orbit around the Sun
+            earthOrbitAngle += 0.002;
+            earth.position.x = Math.cos(earthOrbitAngle) * earthOrbitRadius;
+            earth.position.z = Math.sin(earthOrbitAngle) * earthOrbitRadius;
+
+            // Move Moon in orbit around Earth
+            moonOrbitAngle += 0.01;
+            moon.position.x = earth.position.x + Math.cos(moonOrbitAngle) * moonOrbitRadius;
+            moon.position.z = earth.position.z + Math.sin(moonOrbitAngle) * moonOrbitRadius;
+            moon.position.y = earth.position.y + Math.sin(moonOrbitAngle) * 2;
+
+            // Lock Camera Focus on Earth but allow zoom and rotation
+            controls.target.copy(earth.position);
+            controls.update();
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Make scene responsive
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 Team Performance Tracker  
 
-![Template Preview](image/Preview.png)
+![Template Preview](images/Preview.png)
 
 🔗 [Live Demo](https://mrkweb15.github.io/earthSimulation/)
 

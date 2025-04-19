@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Earth with Clouds</title>
+  <title>Earth with Clouds and Shadows</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
 </head>
@@ -13,6 +13,12 @@
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    
+    // Enable shadows and set shadow map type for smoother shadows
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = true;
+    
     document.body.appendChild(renderer.domElement);
 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -20,8 +26,19 @@
     controls.dampingFactor = 0.05;
     controls.enableZoom = true;
 
+    // Enhanced Sun light with better shadow settings
     const sunLight = new THREE.PointLight(0xffaa33, 2, 300);
     sunLight.position.set(0, 0, 0);
+    sunLight.castShadow = true;
+    
+    // Configure shadow properties for smoother edges
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 500;
+    sunLight.shadow.bias = -0.0001;
+    sunLight.shadow.normalBias = 0.05;
+    
     scene.add(sunLight);
 
     const loader = new THREE.TextureLoader();
@@ -29,7 +46,6 @@
     const earthNight = loader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_lights_2048.png');
     const moonTex = loader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/moon_1024.jpg');
     const cloudTex = loader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_clouds_1024.png');
-
 
     const sun = new THREE.Mesh(
       new THREE.SphereGeometry(20, 32, 32),
@@ -46,36 +62,65 @@
         emissiveIntensity: 0.6
       })
     );
+    earth.castShadow = true;
+    earth.receiveShadow = true;
     scene.add(earth);
 
-    // 🌥️ Clouds
+    // Clouds with shadow support
     const clouds = new THREE.Mesh(
-    new THREE.SphereGeometry(5.1, 64, 64),
-    new THREE.MeshLambertMaterial({
+      new THREE.SphereGeometry(5.1, 64, 64),
+      new THREE.MeshLambertMaterial({
         map: cloudTex,
         transparent: true,
         opacity: 0.9,
         depthWrite: false,
         side: THREE.DoubleSide
-    })
+      })
     );
+    clouds.castShadow = true;
+    clouds.receiveShadow = true;
     scene.add(clouds);
-
 
     const moon = new THREE.Mesh(
       new THREE.SphereGeometry(1.2, 32, 32),
       new THREE.MeshStandardMaterial({ map: moonTex })
     );
+    moon.castShadow = true;
+    moon.receiveShadow = true;
     scene.add(moon);
 
+    // Improved star field with more stars
     function createStars() {
       const geo = new THREE.BufferGeometry();
       const vertices = [];
+      const colors = [];
+      const color = new THREE.Color();
+      
       for (let i = 0; i < 10000; i++) {
-        vertices.push((Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000);
+        // Random star positions
+        vertices.push(
+          (Math.random() - 0.5) * 2000,
+          (Math.random() - 0.5) * 2000,
+          (Math.random() - 0.5) * 2000
+        );
+        
+        // Random star colors
+        color.setHSL(Math.random(), 0.2, Math.random() * 0.5 + 0.5);
+        colors.push(color.r, color.g, color.b);
       }
+      
       geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-      scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.5 })));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      
+      const starsMaterial = new THREE.PointsMaterial({
+        size: 0.5,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.8
+      });
+      
+      const stars = new THREE.Points(geo, starsMaterial);
+      scene.add(stars);
     }
     createStars();
 
@@ -88,7 +133,7 @@
     controls.target.copy(earth.position);
     controls.update();
 
-    // ========== ZOOM CAPTURE + LOCK SYSTEM ==========
+    // Zoom capture + lock system
     function captureZoomDistance() {
       const distance = camera.position.distanceTo(earth.position);
       const direction = new THREE.Vector3().subVectors(camera.position, earth.position).normalize();
@@ -118,17 +163,38 @@
 
       clouds.position.copy(earth.position);
 
-
       moonAngle += 0.01;
       moon.position.x = earth.position.x + Math.cos(moonAngle) * moonRadius;
       moon.position.z = earth.position.z + Math.sin(moonAngle) * moonRadius;
       moon.position.y = earth.position.y + Math.sin(moonAngle) * 2;
+
+      // Update lighting based on Earth's position
+      updateEarthLighting();
 
       controls.target.copy(earth.position);
       controls.update();
 
       renderer.render(scene, camera);
     }
+
+    function updateEarthLighting() {
+      // Calculate vector from Earth to Sun
+      const earthToSun = new THREE.Vector3().subVectors(sun.position, earth.position).normalize();
+      
+      // Get Earth's forward vector based on its rotation
+      const earthForward = new THREE.Vector3(0, 0, 1).applyQuaternion(earth.quaternion);
+      
+      // Calculate dot product to determine lighting
+      const dotProduct = earthForward.dot(earthToSun);
+      
+      // Map dot product to emissive intensity (0-1)
+      const emissiveIntensity = THREE.MathUtils.clamp((1 - dotProduct) / 2, 0, 1);
+      
+      // Apply the intensity to the material
+      earth.material.emissiveIntensity = emissiveIntensity * 0.8;
+      earth.material.needsUpdate = true;
+    }
+
     animate();
 
     window.addEventListener('resize', () => {
